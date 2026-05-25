@@ -481,7 +481,12 @@ def guess_category(path: Path) -> Optional[str]:
         }:
             return None
         if top == "cron" or top == "cronjobs":
-            return "cron-output"
+            # Only the per-run artefact subtree is disposable. Top-level
+            # files like jobs.json (the durable scheduler registry) and
+            # .tick.lock must never be auto-tracked for cleanup.
+            if len(rel.parts) >= 2 and rel.parts[1] == "output":
+                return "cron-output"
+            return None
         if top == "cache":
             return "temp"
     except ValueError:
