@@ -48,29 +48,48 @@ jobs:
     concurrency:
       group: auto-fix-main
       cancel-in-progress: true
+    env:
+      APP_ID: ${{ secrets.APP_ID }}
+      APP_PRIVATE_KEY: ${{ secrets.APP_PRIVATE_KEY }}
     steps:
+      - name: Check required secrets
+        id: secrets
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ -z "${APP_ID}" ] || [ -z "${APP_PRIVATE_KEY}" ]; then
+            echo "ready=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::Skipping auto-fix-main because APP_ID / APP_PRIVATE_KEY are not configured for this repo."
+            exit 0
+          fi
+          echo "ready=true" >> "$GITHUB_OUTPUT"
+
       - name: Generate GitHub App token
         id: app-token
+        if: steps.secrets.outputs.ready == 'true'
         uses: actions/create-github-app-token@7bfa3a4717ef143a604ee0a99d859b8886a96d00  # v1.9.3
         with:
           app-id: ${{ secrets.APP_ID }}
           private-key: ${{ secrets.APP_PRIVATE_KEY }}
 
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2
+        if: steps.secrets.outputs.ready == 'true'
         with:
           ref: main
           token: ${{ steps.app-token.outputs.token }}
 
       - uses: ./.github/actions/nix-setup
+        if: steps.secrets.outputs.ready == 'true'
         with:
           cachix-auth-token: ${{ secrets.CACHIX_AUTH_TOKEN }}
 
       - name: Apply lockfile hashes
         id: apply
+        if: steps.secrets.outputs.ready == 'true'
         run: nix run .#fix-lockfiles -- --apply
 
       - name: Commit & push
-        if: steps.apply.outputs.changed == 'true'
+        if: steps.secrets.outputs.ready == 'true' && steps.apply.outputs.changed == 'true'
         shell: bash
         run: |
           set -euo pipefail
